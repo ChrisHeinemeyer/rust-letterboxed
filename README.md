@@ -3,6 +3,7 @@
 This is a project I wrote to learn rust and the statig library.
 
 ## Usage
+Find a [letterboxed](https://www.nytimes.com/puzzles/letter-boxed) puzzle
 
 ```
 cargo build --release
