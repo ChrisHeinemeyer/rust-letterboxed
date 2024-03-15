@@ -10,17 +10,23 @@ use std::{
     io::{self, Write},
 };
 
+/// Contains the state of the game
 #[derive(Debug, Default)]
 pub struct LetterBoxed {
+    /// The word list
     pub dict: Vec<String>,
+    /// The 12 letters of the game
     pub word: String,
+    /// A list of words that solve the game
     pub solution: Vec<String>,
 }
 
 pub enum Event {
+    /// Proceed to the next State
     Next,
 }
 
+/// The states and state methods for [LetterBoxed]
 #[state_machine(initial = "State::load_file()", state(derive(Debug)))]
 impl LetterBoxed {
     #[state(entry_action = "read_dict")]
@@ -71,18 +77,8 @@ impl LetterBoxed {
 
     #[action]
     fn process_input(&mut self) {
-        let permutations = self.word.chars().permutations(2);
-        let _word_vec: Vec<Vec<String>> = Vec::new();
-        let l: &String = &self.word.to_lowercase();
-        let re: &Regex = &self.get_bad_word_re();
-        let mut m: HashMap<String, Vec<String>> = HashMap::new();
-        permutations.for_each(|v| {
-            m.insert(
-                v.iter().collect(),
-                find_words(v[0], v[1], l, &self.dict, re),
-            );
-        });
-        self.solution = self.solve(m).unwrap();
+        let m = self.get_word_map();
+        self.solution = self.solve(&m).unwrap();
     }
 
     #[state(exit_action = "cleanup")]
@@ -100,7 +96,33 @@ impl LetterBoxed {
     }
 }
 
+/// The word logic for [LetterBoxed]
+/// TODO: maybe these shouldn't be class methods and instead should take self.word and self.dict as parameters
 impl LetterBoxed {
+    // Get a map of "{first character}{last character" : [all legal words]
+    // Example
+    // self.words = "rdea"
+    // m = {"rr": ["rear"], "rd": ["red", "rad", "read"], "re":..., "aa": ["area"]}
+    fn get_word_map(&self) -> HashMap<String, Vec<String>> {
+        let permutations: Vec<Vec<char>> = product(self.word.as_bytes(), 2);
+        let _word_vec: Vec<Vec<String>> = Vec::new();
+        let l: &String = &self.word.to_lowercase();
+        let re: &Regex = &self.get_bad_word_re();
+        let mut m: HashMap<String, Vec<String>> = HashMap::new();
+        permutations.iter().for_each(|v| {
+            m.insert(
+                v.iter().collect(),
+                find_words(v[0], v[1], l, &self.dict, re),
+            );
+        });
+        m
+    }
+    /// Return a [Regex] that is true if any illegal
+    /// (characters on the same side of the square being next to each other)
+    /// substrings are present in a word
+    /// For example, if the 4 sides are ["abc", "def", "ghi", "jkl"]
+    /// the regex would match if any of ["aa", "ab", "ac", "ba", ..., "ll"]
+    /// are in a word.
     fn get_bad_word_re(&self) -> Regex {
         let mut s: String = String::new();
         let l: &String = &self.word.to_lowercase();
@@ -121,7 +143,9 @@ impl LetterBoxed {
         Regex::new(&s).unwrap()
     }
 
-    fn solve(&mut self, m: HashMap<String, Vec<String>>) -> Result<Vec<String>, &str> {
+    /// Get the first solution to the puzzle.
+    /// Randomize the order so that on multiple iterations you can get different solutions
+    fn solve(&mut self, m: &HashMap<String, Vec<String>>) -> Result<Vec<String>, &str> {
         for i in 3..6 {
             let mut combos: Vec<Vec<char>> = product(self.word.as_bytes(), i);
             let mut rng = thread_rng();
@@ -136,6 +160,10 @@ impl LetterBoxed {
         Err("No solutions found")
     }
 
+    /// Get the firt solution to the puzzle given the first and last letters of each word in the solution.
+    /// Example
+    /// c = ['a', 'r', 'p', "l"]
+    /// A possible solution could be ["air", "rap", "pal"]
     fn solve_combo(
         &mut self,
         c: &Vec<char>,
@@ -153,6 +181,11 @@ impl LetterBoxed {
         }
     }
 
+    /// Check to see if a solution is found in the combination of all words and return the first
+    /// solution that is found.
+    /// Example
+    /// v = [["art", "apt"], ["trip"], ["party", "pantry"]
+    /// This function would check all [2 * 1 * 2] combos of words to see if they are a solution
     fn has_solution(&self, v: Vec<Vec<String>>) -> Result<Vec<String>, &str> {
         for x in v.into_iter().multi_cartesian_product() {
             if self.is_solution(&x) {
@@ -162,6 +195,9 @@ impl LetterBoxed {
         return Err("");
     }
 
+    /// Return true if the words in v are a solution
+    /// Because only valid words are entered into this function,
+    /// We just need to see if 12 unique letters are entered
     fn is_solution(&self, v: &Vec<String>) -> bool {
         let mut s: HashSet<char> = HashSet::new();
         v.iter().for_each(|word: &String| {
@@ -173,6 +209,7 @@ impl LetterBoxed {
     }
 }
 
+/// Find all words that are legal and have the first and last characters given
 fn find_words(
     first_char: char,
     last_char: char,
@@ -192,10 +229,15 @@ fn find_words(
     res_v
 }
 
-fn is_valid_word(word: &String, re: &Regex, bad_word_re: &Regex) -> bool {
-    re.is_match(word) & !bad_word_re.is_match(word)
+/// Return if a word is legal
+/// A word is legal if it only contains letters from the sides of the puzzle
+/// and if no letters from the same side are adjacent to each other in the word
+fn is_valid_word(word: &String, only_good_letters_re: &Regex, bad_word_re: &Regex) -> bool {
+    only_good_letters_re.is_match(word) & !bad_word_re.is_match(word)
 }
 
+/// Get the cartesian product of a vector of bytes with itself n times as characters
+/// TODO: learn how to make this generic so it can have signature product<T>(vector: &[T], n: i32) -> Vec<Vec<T>>
 fn product(vector: &[u8], n: i32) -> Vec<Vec<char>> {
     let mut result: Vec<Vec<char>> = vec![vec![]];
     for _ in 0..n {
