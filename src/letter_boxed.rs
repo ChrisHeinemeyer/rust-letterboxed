@@ -78,7 +78,7 @@ impl LetterBoxed {
     #[action]
     fn process_input(&mut self) {
         let m = self.get_word_map();
-        self.solution = self.solve(&m).unwrap();
+        self.solution = self.solve(&m).unwrap_or(Vec::new());
     }
 
     #[state(exit_action = "cleanup")]
